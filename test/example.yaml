@@ -1,0 +1,9 @@
+key: value
+lang:
+  - haskell
+  - ocaml
+  - koka
+package-manager:
+  haskell: stack
+  ocaml: opam
+  koka: not-yet

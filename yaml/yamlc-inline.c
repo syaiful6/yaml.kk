@@ -118,9 +118,8 @@ kk_yaml_yamlc__yaml_mark kk_yaml_yamlc_get_end_mark(kk_box_t bevent,
 kk_string_t kk_yaml_yamlc_get_alias_anchor(kk_box_t bevent, kk_context_t *ctx) {
   yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
 
-  kk_box_drop(bevent, ctx);
-
   const char *anchor = (const char *)event->data.alias.anchor;
+  kk_box_drop(bevent, ctx);
   return kk_string_alloc_from_utf8(anchor, ctx);
 }
 
@@ -215,7 +214,7 @@ kk_string_t kk_yaml_yamlc_get_sequence_start_tag(kk_box_t bevent,
 kk_string_t kk_yaml_yamlc_get_mapping_start_anchor(kk_box_t bevent,
                                                    kk_context_t *ctx) {
   yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
-  const char *anchor = (const char *)event->data.mapping_start.tag;
+  const char *anchor = (const char *)event->data.mapping_start.anchor;
   if (!anchor) {
     kk_box_drop(bevent, ctx);
     return kk_string_empty();

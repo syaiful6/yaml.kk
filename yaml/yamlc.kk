@@ -155,7 +155,6 @@ pub fun mapping-style/show(s: mapping-style): string
     BlockMapping -> "BlockMapping"
     FlowMapping -> "FlowMapping"
 
-
 pub fun event/show(ev: event): string
   match ev
     EventStreamStart -> "EventStreamStart"

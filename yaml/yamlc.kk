@@ -172,7 +172,7 @@ pub fun event/show(ev: event): string
 // The underlying libyaml parser pointer
 alias libyaml-parser = any
 
-extern string-yaml-parser(): libyaml-parser
+extern create-yaml-parser(): libyaml-parser
   c "kk_yaml_parser_create"
 
 // The underlying yaml event
@@ -186,6 +186,9 @@ extern yaml-close-file(file: any): ()
 
 extern yaml-set-input-file(parser: libyaml-parser, file: any): ()
   c "kk_yaml_yamlc_set_input_file"
+
+extern yaml-set-input-string(parser: libyaml-parser, yaml: string): ()
+  c "kk_yaml_c_set_input_string"
 
 extern yaml-parser-parse-one(parser: libyaml-parser): maybe<libyaml-event>
   c "kk_yaml_parse_one"
@@ -244,24 +247,26 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
     2 -> Just(EventStreamEnd)
     3 -> Just(EventDocumentStart)
     4 -> Just(EventDocumentEnd)
-    5 -> Just(EventAlias(yaml-get-alias-anchor(ev)));
+    5 -> 
+      val anchor = ev.yaml-get-alias-anchor
+      Just(EventAlias(anchor));
     6 ->
       val value = yaml-get-scalar-value(ev);
       val tag = ev.yaml-get-scalar-tag.string-to-tag
       val anchor = ev.yaml-get-scalar-anchor
       with style <- ev.yaml-get-scalar-style.style/from-int.map
-      EventScalar(value, tag, style, if anchor == "" then Just(anchor) else Nothing)
+      EventScalar(value, tag, style, if anchor != "" then Just(anchor) else Nothing)
     7 ->
       val tag = ev.yaml-get-sequence-start-tag.string-to-tag
       val anchor = ev.yaml-get-sequence-start-anchor
       with style <- ev.yaml-get-sequence-start-style.sequence-style/from-int.map
-      EventSequenceStart(tag, style, if anchor == "" then Just(anchor) else Nothing)
+      EventSequenceStart(tag, style, if anchor != "" then Just(anchor) else Nothing)
     8 -> Just(EventSequenceEnd)
     9 ->
       val tag = ev.yaml-get-mapping-start-tag.string-to-tag
       val anchor = ev.yaml-get-mapping-start-anchor
       with style <- ev.yaml-get-mapping-start-style.mapping-style/from-int.map
-      EventMappingStart(tag, style, if anchor == "" then Just(anchor) else Nothing)
+      EventMappingStart(tag, style, if anchor != "" then Just(anchor) else Nothing)
     10 -> Just(EventMappingEnd)
     _ -> Nothing
 
@@ -273,14 +278,7 @@ pub effect stream<a>
   fun yield(x: a) : ()
 
 
-pub fun decode-file(path: path): <div,stream<marked-event>,console> ()
-  val parser = string-yaml-parser()
-
-  val file = path.string.yaml-open-file
-
-  with finally { yaml-close-file(file) }
-  // loop until we see Nothing
-  parser.yaml-set-input-file(file)
+fun stream-event(parser: libyaml-parser): <div,stream<marked-event>> ()
   val x = ref(False)
   while { not(!x) }
     val event = parser.yaml-parser-parse-one
@@ -292,6 +290,20 @@ pub fun decode-file(path: path): <div,stream<marked-event>,console> ()
           Nothing ->
             x := True
           Just(ev) -> yield(ev)
+
+
+pub fun decode-file(path: path): <div,stream<marked-event>> ()
+  val parser = create-yaml-parser()
+  val file = path.string.yaml-open-file
+  with finally { yaml-close-file(file) }
+  parser.yaml-set-input-file(file)
+  parser.stream-event
+
+
+pub fun decode-string(yaml: string): <div, stream<marked-event>> ()
+  val parser = create-yaml-parser()
+  parser.yaml-set-input-string(yaml)
+  parser.stream-event
 
 
 pub fun print-stream-event(action: () -> <stream<marked-event>,console|e> a): <console|e> a

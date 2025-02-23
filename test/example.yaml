@@ -1,9 +1,10 @@
-key: value
-lang:
-  - haskell
-  - ocaml
-  - koka
-package-manager:
-  haskell: stack
-  ocaml: opam
-  koka: not-yet
+base: &base
+    name: Everyone has same name
+
+foo: &foo
+    <<: *base
+    age: 10
+
+bar: &bar
+    <<: *base
+    age: 20

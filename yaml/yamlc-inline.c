@@ -32,7 +32,7 @@ static void kk_yaml_event_free(void *p, kk_block_t *b, kk_context_t *ctx) {
   }
 }
 
-static void kk_yaml_yamlc_set_input_file(kk_box_t bparser, kk_box_t bfile,
+static kk_unit_t kk_yaml_yamlc_set_input_file(kk_box_t bparser, kk_box_t bfile,
                                   kk_context_t *ctx) {
   yaml_parser_t *parser = (yaml_parser_t *)kk_cptr_unbox_borrowed(bparser, ctx);
   FILE *file = (FILE *)kk_cptr_unbox_borrowed(bfile, ctx);
@@ -41,16 +41,20 @@ static void kk_yaml_yamlc_set_input_file(kk_box_t bparser, kk_box_t bfile,
 
   kk_box_drop(bfile, ctx);
   kk_box_drop(bparser, ctx);
+
+  return kk_Unit;
 }
 
-static void kk_yaml_c_set_input_string(kk_box_t bparser, kk_string_t yaml, kk_context_t *ctx) {
+static kk_unit_t kk_yaml_c_set_input_string(kk_box_t bparser, kk_string_t yaml, kk_context_t *ctx) {
   yaml_parser_t *parser = (yaml_parser_t *)kk_cptr_unbox_borrowed(bparser, ctx);
   kk_ssize_t len;
-  const u_int8_t *cyaml = (const unsigned char*)kk_string_buf_borrow(yaml, &len, ctx);
+  const u_int8_t *cyaml = kk_string_buf_borrow(yaml, &len, ctx);
   yaml_parser_set_input_string(parser, cyaml, len);
 
   // kk_string_drop(yaml, ctx);
   kk_box_drop(bparser, ctx);
+
+  return kk_Unit;
 }
 
 kk_box_t kk_yaml_yamlc_open_file(kk_string_t path, kk_context_t *ctx) {

@@ -12,8 +12,8 @@ pub type yaml-json
   YamlBool(b: bool)
   YamlDouble(double: float64)
   YamlString(string: string)
-  YamlSequence(sequence: list<yaml-value>)
-  YamlMapping(mapping: list<(string, yaml-value)>)
+  YamlSequence(sequence: list<yaml-json>)
+  YamlMapping(mapping: list<(string, yaml-json)>)
 
 pub type yaml-value
   Scalar(anchor: anchor, tag: tag, value: string, style: style, plain-implicit: bool, quoted-implicit: bool)

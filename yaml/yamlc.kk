@@ -1,6 +1,7 @@
 module yaml/yamlc
 
 import std/os/path
+import std/num/int32
 
 extern import
   c { vcpkg="libyaml"; library="yaml" }
@@ -53,10 +54,10 @@ pub type event
   EventDocumentStart
   EventDocumentEnd
   EventAlias(name: anchor-name)
-  EventScalar(value: string, tag: tag, style: style, anchor: anchor)
-  EventSequenceStart(tag: tag, style: sequence-style, anchor: anchor)
+  EventScalar(value: string, tag: tag, style: style, anchor: anchor, plain-implicit: bool, quoted-implicit: bool)
+  EventSequenceStart(tag: tag, style: sequence-style, anchor: anchor, implicit: bool)
   EventSequenceEnd
-  EventMappingStart(tag: tag, style: mapping-style, anchor: anchor)
+  EventMappingStart(tag: tag, style: mapping-style, anchor: anchor, implicit: bool)
   EventMappingEnd
 
 // The pointer position
@@ -64,6 +65,9 @@ pub value struct yaml-mark
   index: int
   line: int
   column: int
+
+pub fun yaml-mark/show(mark: yaml-mark): string
+  "index = " ++ show(mark.index) ++ " line = " ++ show(mark.line) ++ "column = " ++ show(mark.column)
 
 // Event with start and end marks
 pub struct marked-event
@@ -162,10 +166,10 @@ pub fun event/show(ev: event): string
     EventDocumentStart -> "EventDocumentStart"
     EventDocumentEnd -> "EventDocumentEnd"
     EventAlias(name) -> "EventAlias(" ++ show(name) ++ ")"
-    EventScalar(value, tag, style, anchor) -> "EventScalar(" ++ [show(value), show(tag), show(style), show(anchor)].join(", ") ++ ")"
-    EventSequenceStart(tag, style, anchor) -> "EventSequenceStart(" ++ [show(tag), show(style), show(anchor)].join(", ") ++ ")"
+    EventScalar(value, tag, style, anchor, plain-implicit, quoted-implicit) -> "EventScalar(" ++ [show(value), show(tag), show(style), show(anchor), show(plain-implicit), show(quoted-implicit)].join(", ") ++ ")"
+    EventSequenceStart(tag, style, anchor, implicit) -> "EventSequenceStart(" ++ [show(tag), show(style), show(anchor), show(implicit)].join(", ") ++ ")"
     EventSequenceEnd -> "EventSequenceEnd"
-    EventMappingStart(tag, style, anchor) -> "EventMappingStart(" ++ [show(tag), show(style), show(anchor)].join(", ") ++ ")"
+    EventMappingStart(tag, style, anchor, implicit) -> "EventMappingStart(" ++ [show(tag), show(style), show(anchor), show(implicit)].join(", ") ++ ")"
     EventMappingEnd -> "EventMappingEnd"
 
 
@@ -190,54 +194,66 @@ extern yaml-set-input-file(parser: libyaml-parser, file: any): ()
 extern yaml-set-input-string(parser: libyaml-parser, yaml: string): ()
   c "kk_yaml_c_set_input_string"
 
-extern yaml-parser-parse-one(parser: libyaml-parser): maybe<libyaml-event>
+extern yaml-parser-parse-one(parser: libyaml-parser): <div> maybe<libyaml-event>
   c "kk_yaml_parse_one"
 
-extern yaml-get-event-type(ev: libyaml-event): int
+extern yaml-get-event-type(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_type"
 
-extern yaml-get-start-mark(ev: libyaml-event): yaml-mark
+extern yaml-get-start-mark(^ev: libyaml-event): yaml-mark
   c "kk_yaml_yamlc_get_start_mark"
 
-extern yaml-get-end-mark(ev: libyaml-event): yaml-mark
+extern yaml-get-end-mark(^ev: libyaml-event): yaml-mark
   c "kk_yaml_yamlc_get_end_mark"
 
-extern yaml-get-alias-anchor(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_alias_anchor"
+extern yaml-get-alias-anchor(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_alias_anchor"
 
-extern yaml-get-scalar-value(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_scalar_value"
+extern yaml-get-scalar-value(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_scalar_value"
 
-extern yaml-get-scalar-style(ev: libyaml-event): int
-  c "kk_yaml_yamlc_get_scalar_style"
+extern yaml-get-scalar-style(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_scalar_style"
 
-extern yaml-get-scalar-tag(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_scalar_tag"
+extern yaml-get-scalar-tag(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_scalar_tag"
 
-extern yaml-get-scalar-anchor(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_scalar_anchor"
+extern yaml-get-scalar-anchor(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_scalar_anchor"
 
-extern yaml-get-sequence-start-anchor(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_sequence_start_anchor"
+extern yaml-get-scalar-plain-implicit(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_scalar_plain_implicit"
 
-extern yaml-get-sequence-start-style(ev: libyaml-event): int
-  c "kk_yaml_yamlc_get_sequence_start_style"
+extern yaml-get-scalar-quoted-implicit(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_scalar_quoted_implicit"
 
-extern yaml-get-sequence-start-tag(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_sequence_start_tag"
+extern yaml-get-sequence-start-anchor(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_sequence_start_anchor"
 
-extern yaml-get-mapping-start-anchor(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_mapping_start_anchor"
+extern yaml-get-sequence-start-style(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_sequence_start_style"
 
-extern yaml-get-mapping-start-style(ev: libyaml-event): int
-  c "kk_yaml_yamlc_get_mapping_start_style"
+extern yaml-get-sequence-start-tag(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_sequence_start_tag"
 
-extern yaml-get-mapping-start-tag(ev: libyaml-event): string
-  c "kk_yaml_yamlc_get_mapping_start_tag"
+extern yaml-get-sequence-start-implicit(ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_sequence_start_implicit"
+
+extern yaml-get-mapping-start-anchor(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_mapping_start_anchor"
+
+extern yaml-get-mapping-start-style(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_mapping_start_style"
+
+extern yaml-get-mapping-start-tag(^ev: libyaml-event): string
+  c "kk_yaml_yamlc_get_event_mapping_start_tag"
+
+extern yaml-get-mapping-start-implicit(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_mapping_start_implicit"
 
 // get event
 fun get-event(ev: libyaml-event): maybe<marked-event>
-  val et = yaml-get-event-type(ev);
+  val et = ev.yaml-get-event-type.int
   val start = yaml-get-start-mark(ev);
   val end = yaml-get-end-mark(ev);
 
@@ -254,19 +270,23 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
       val value = yaml-get-scalar-value(ev);
       val tag = ev.yaml-get-scalar-tag.string-to-tag
       val anchor = ev.yaml-get-scalar-anchor
-      with style <- ev.yaml-get-scalar-style.style/from-int.map
-      EventScalar(value, tag, style, if anchor != "" then Just(anchor) else Nothing)
+      val plain-implicit = ev.yaml-get-scalar-plain-implicit
+      val quoted-implicit = ev.yaml-get-scalar-quoted-implicit
+      with style <- ev.yaml-get-scalar-style.int.style/from-int.map
+      EventScalar(value, tag, style, if anchor != "" then Just(anchor) else Nothing, plain-implicit == 1.int32, quoted-implicit == 1.int32)
     7 ->
       val tag = ev.yaml-get-sequence-start-tag.string-to-tag
       val anchor = ev.yaml-get-sequence-start-anchor
-      with style <- ev.yaml-get-sequence-start-style.sequence-style/from-int.map
-      EventSequenceStart(tag, style, if anchor != "" then Just(anchor) else Nothing)
+      val implicit = ev.yaml-get-sequence-start-implicit
+      with style <- ev.yaml-get-sequence-start-style.int.sequence-style/from-int.map
+      EventSequenceStart(tag, style, if anchor != "" then Just(anchor) else Nothing, implicit == 1.int32)
     8 -> Just(EventSequenceEnd)
     9 ->
       val tag = ev.yaml-get-mapping-start-tag.string-to-tag
       val anchor = ev.yaml-get-mapping-start-anchor
-      with style <- ev.yaml-get-mapping-start-style.mapping-style/from-int.map
-      EventMappingStart(tag, style, if anchor != "" then Just(anchor) else Nothing)
+      val implicit = ev.yaml-get-mapping-start-implicit
+      with style <- ev.yaml-get-mapping-start-style.int.mapping-style/from-int.map
+      EventMappingStart(tag, style, if anchor != "" then Just(anchor) else Nothing, implicit == 1.int32)
     10 -> Just(EventMappingEnd)
     _ -> Nothing
 
@@ -274,25 +294,29 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
   Marked-event(evn, start, end)
 
 // Effect for libyaml event
-pub effect stream<a>
+pub effect yaml-stream<a>
   fun yield(x: a) : ()
 
+// for someone need pull-based parsing
+pub fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
+  val event = parser.yaml-parser-parse-one
+  match event
+    Nothing -> Nothing
+    Just(event) -> event.get-event
 
-fun stream-event(parser: libyaml-parser): <div,stream<marked-event>> ()
+
+fun stream-event(parser: libyaml-parser): <div,yaml-stream<marked-event>> ()
   val x = ref(False)
   while { not(!x) }
-    val event = parser.yaml-parser-parse-one
+    val event = parser.do-parse-one
     match event
       Nothing ->
         x := True
       Just(event) ->
-        match event.get-event
-          Nothing ->
-            x := True
-          Just(ev) -> yield(ev)
+        yield(event)
 
 
-pub fun decode-file(path: path): <div,stream<marked-event>> ()
+pub fun decode-file(path: path): <div,yaml-stream<marked-event>> ()
   val parser = create-yaml-parser()
   val file = path.string.yaml-open-file
   with finally { yaml-close-file(file) }
@@ -300,18 +324,18 @@ pub fun decode-file(path: path): <div,stream<marked-event>> ()
   parser.stream-event
 
 
-pub fun decode-string(yaml: string): <div, stream<marked-event>> ()
+pub fun decode-string(yaml: string): <div, yaml-stream<marked-event>> ()
   val parser = create-yaml-parser()
   parser.yaml-set-input-string(yaml)
   parser.stream-event
 
 
-pub fun print-stream-event(action: () -> <stream<marked-event>,console|e> a): <console|e> a
+pub fun print-stream-event(action: () -> <yaml-stream<marked-event>,console|e> a): <console|e> a
   with fun yield(x: marked-event) x.event.println
   action()
 
 
-pub fun collect-stream-event(action: () -> <stream<marked-event>|e> ()): e list<marked-event>
+pub fun collect-stream-event(action: () -> <yaml-stream<marked-event>|e> ()): e list<marked-event>
   var lines := []
   with handler
     return(x) lines.reverse()

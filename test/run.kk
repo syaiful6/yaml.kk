@@ -14,9 +14,9 @@ fun test-parse-string(): <io> list<marked-event>
   with collect-stream-event
   decode-string(yaml)
 
-fun test-parse-as-yaml(name: string): <io> either<string, list<yaml-value>>
+fun test-parse-as-yaml(name: string): <io> list<yaml-value>
   val streams = test-parse-file(name)
-  streams.parse-yaml-stream
+  streams.parse-yaml-stream-exn
 
 fun main()
   val events = test-parse-file("test/example.yaml")
@@ -34,4 +34,7 @@ fun main()
 
   with name <- ["test/example.yaml", "test/strings.yaml", "test/mapping.yaml"].foreach
   val parsed = name.test-parse-as-yaml
-  parsed.show.println
+  parsed.show.println()
+  "Json representation".println()
+  with yaml <- parsed.foreach
+  yaml.to-json.show.println()

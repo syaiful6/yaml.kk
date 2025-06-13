@@ -1,2 +1,4 @@
 key: value
 other-key: other-value
+bool-key: on
+bool-key-turnoff: false

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <yaml.h>
 
+
 /**
  * Common pattern for accessing int32 value
  */
@@ -200,10 +201,45 @@ kk_yaml_yamlc_get_event_document_start_version_directive(kk_box_t bevent,
   int major = (int)(event->data.document_start.version_directive->major);
   int minor = (int)(event->data.document_start.version_directive->minor);
   return kk_std_core_types__new_Just(
-      kk_std_core_types__new_Tuple2(kk_integer_from_int(major, ctx),
-                                    kk_integer_from_int(minor, ctx), ctx),
+      kk_std_core_types__tuple2_box(
+        kk_std_core_types__new_Tuple2(
+          kk_integer_box(kk_integer_from_int(major, ctx), ctx),
+          kk_integer_box(kk_integer_from_int(minor, ctx), ctx), 
+          ctx),
+        ctx),
       ctx);
 }
+
+static kk_std_core_types__list
+kk_yaml_yamlc_get_event_document_start_tag_directives(kk_box_t bevent, kk_context_t *ctx) {
+  yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
+
+  kk_std_core_types__list hd  = kk_std_core_types__new_Nil(ctx);
+
+  if (event->data.document_start.tag_directives.start == event->data.document_start.tag_directives.end) {
+    return hd;
+  }
+
+  yaml_tag_directive_t *tag;
+  kk_std_core_types__tuple2 directive;
+  const char *handler;
+  const char *prefix;
+
+  for ( tag = event->data.document_start.tag_directives.start; tag != event->data.document_start.tag_directives.end; tag++) {
+    handler = (const char *)((yaml_char_t *)tag->handle);
+    prefix = (const char *)((yaml_char_t *)tag->prefix);
+
+    directive = kk_std_core_types__new_Tuple2(
+      kk_string_box(kk_string_alloc_from_qutf8(handler, ctx)), 
+      kk_string_box(kk_string_alloc_from_qutf8(prefix, ctx)),
+      ctx
+    );
+    hd = kk_std_core_types__new_Cons(kk_reuse_null, 0, kk_std_core_types__tuple2_box(directive, ctx), hd, ctx);
+  }
+
+  return hd;
+}
+DEFINE_YAML_EVENT_INT32_GETTER(document_start, implicit, int, document_start_implicit);
 
 // accessor for scalar field
 DEFINE_YAML_EVENT_INT32_GETTER(scalar, style, yaml_scalar_style_t,
@@ -234,3 +270,6 @@ DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, style, yaml_mapping_style_t,
                                mapping_start_style);
 DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, implicit, int,
                                mapping_start_implicit);
+
+// accessor for document end
+DEFINE_YAML_EVENT_INT32_GETTER(document_end, implicit, int, document_end_implicit);

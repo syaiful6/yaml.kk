@@ -3,6 +3,8 @@ module yaml/yaml
 import yaml/yamlc
 import std/core/exn
 import std/num/float64
+import std/core/undiv
+
 
 pub extend type exception-info
   YamlExnConvert
@@ -41,7 +43,7 @@ type parse-node
 
 alias anchor-map = list<(string, yaml-value)>
 
-
+// TODO: actually print yaml string
 pub fun yaml-value/show(value: yaml-value): <div> string
   match value
     Scalar(anchor, tag, value, style, plain-implicit, quoted-implicit) ->
@@ -53,14 +55,29 @@ pub fun yaml-value/show(value: yaml-value): <div> string
       "Mapping(" ++ [show(tag), show(anchor), show(members), show(implicit)].join(", ") ++ ")"
 
 
-pub fun yaml-json/show(value: yaml-json): <div> string
+fun char/quote(c: char): string
+  match c
+    '"' -> "\\\""
+    '\\' -> "\\\\"
+    '\n' -> "\\n"
+    '\r' -> "\\r"
+    '\t' -> "\\t"
+    _ -> c.string
+
+
+// quote essential and whitespace characters in a JSON string
+fun string/quote(s: string): string
+  s.list.map(quote).join
+
+
+pub fun yaml-json/show(value: yaml-json): string
   match value
-    YamlNull -> "YamlNull"
-    YamlBool(b) -> "YamlBool(" ++ show(b) ++ ")"
-    YamlDouble(d) -> "YamlDouble(" ++ show(d) ++ ")"
-    YamlString(s) -> "YamlString(" ++ show(s) ++ ")"
-    YamlSequence(xs) -> "YamlSequence(" ++ show(xs) ++ ")"
-    YamlMapping(mapping) -> "YamlMapping(" ++ show(mapping) ++ ")"
+    YamlNull -> "null"
+    YamlBool(b) -> if b then "true" else "false"
+    YamlDouble(d) -> d.show()
+    YamlString(s) -> "\"" ++ s.quote ++ "\""
+    YamlSequence(xs) -> xs.show(?show=fn(s) s.pretend-decreasing.show)
+    YamlMapping(mapping) -> "{" ++ mapping.map(fn((k, v)) "\"" ++ k ++ "\":" ++ v.pretend-decreasing.show).join(",") ++ "}"
 
 
 fun anchors/lookup(anchors: anchor-map, name: string): maybe<yaml-value>
@@ -105,14 +122,14 @@ fun simple-key-to-string(key: yaml-value): <exn> string
     _ -> throw("non-string key is not supported", YamlExnConvert)
 
 
-pub fun to-json-exn(value: yaml-value): <div,exn> yaml-json
+pub fun to-json-exn(value: yaml-value): <exn> yaml-json
   match value
     Scalar(_, _, scalar-value, _, _, quoted-implicit) | quoted-implicit -> YamlString(scalar-value)
     Scalar(_, _, scalar-value) -> yaml-scalar-to-json(scalar-value)
     Alias(name) -> throw("Anchors are not supported when serialising to JSON. But got '" ++ show(name) ++ "' alias.", YamlExnConvert)
-    Sequence(_, _, members, _) -> YamlSequence(members.map(to-json-exn))
+    Sequence(_, _, members, _) -> YamlSequence(members.map(fn (item) item.pretend-decreasing.to-json-exn))
     Mapping(_, _, members, _) ->
-      YamlMapping(members.map fn((key, item)) (key.simple-key-to-string(), item.to-json-exn()))
+      YamlMapping(members.map fn((key, item)) (key.simple-key-to-string(), item.pretend-decreasing.to-json-exn()))
 
 
 pub fun to-json(value: yaml-value): <div> either<exception, yaml-json>

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <yaml.h>
+#include <kklib.h>
 
 /**
  * Common pattern for accessing int32 value

@@ -162,7 +162,7 @@ fun parse-yaml-document(events: list<marked-event>): <div,exn> (yaml-value, list
       val (root-node, events-after-content) = rest.parse-content-node(Nil, Nil)
       match events-after-content
         Cons(Marked-event(EventDocumentEnd, _, _), remaining-after-doc-end) -> (root-node, remaining-after-doc-end)
-        Cons(current, _) -> throw("Expecting EventDocumentStart", YamlExnParser(Just(current)))
+        Cons(current, _) -> throw("Expecting EventDocumentEnd after document content", YamlExnParser(Just(current)))
         Nil -> throw("Expected EventDocumentEnd after document content.", YamlExnParser(Nothing))
     Cons(Marked-event(ev, start, end), _)-> throw("Expecting EventDocumentStart, but got " ++ show(ev), YamlExnParser(Just(Marked-event(ev, start, end))))
     _ -> throw("Expecting events, but got empty", YamlExnParser(Nothing))

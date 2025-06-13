@@ -14,6 +14,30 @@ pub alias anchor-name = string
 
 pub alias anchor = maybe<anchor-name>
 
+
+pub type yaml-encoding
+  AnyEncoding
+  Utf8Encoding
+  Utf16LeEncoding
+  Utf16BeEncoding
+
+
+pub fun yaml-encoding/from-int(i: int): maybe<yaml-encoding>
+  match i
+    0 -> Just(AnyEncoding)
+    1 -> Just(Utf8Encoding)
+    2 -> Just(Utf16LeEncoding)
+    3 -> Just(Utf16BeEncoding)
+    _ -> Nothing
+
+
+pub value type yaml-version
+  YamlVersion(major: int, minor: int)
+
+// yaml-tag-directive constains yaml tag directive handler and prefix
+pub value type yaml-tag-directive
+  YamlTagDirective(hd: string, pfx: string)
+
 // Style for scalars - e.g quoted / folded
 pub type style
   Any
@@ -24,17 +48,20 @@ pub type style
   Folded
   PlainNoTag
 
+
 // Style for sequences - e.g. block or flow
 pub type sequence-style
   AnySequence
   BlockSequence
   FlowSequence
 
+
 // Style for mapping - e.g block or flow
 pub type mapping-style
   AnyMapping
   BlockMapping
   FlowMapping
+
 
 pub value type tag
   StrTag
@@ -48,11 +75,12 @@ pub value type tag
   UriTag(uri:string)
   NoTag
 
+
 pub type event
-  EventStreamStart
+  EventStreamStart(encoding: yaml-encoding)
   EventStreamEnd
-  EventDocumentStart
-  EventDocumentEnd
+  EventDocumentStart(version: maybe<yaml-version>, tag-directive: list<yaml-tag-directive>, implicit: bool)
+  EventDocumentEnd(implicit: bool)
   EventAlias(name: anchor-name)
   EventScalar(value: string, tag: tag, style: style, anchor: anchor, plain-implicit: bool, quoted-implicit: bool)
   EventSequenceStart(tag: tag, style: sequence-style, anchor: anchor, implicit: bool)
@@ -60,11 +88,13 @@ pub type event
   EventMappingStart(tag: tag, style: mapping-style, anchor: anchor, implicit: bool)
   EventMappingEnd
 
+
 // The pointer position
 pub value struct yaml-mark
   index: int
   line: int
   column: int
+
 
 pub fun yaml-mark/show(mark: yaml-mark): string
   "index = " ++ show(mark.index) ++ " line = " ++ show(mark.line) ++ "column = " ++ show(mark.column)
@@ -200,6 +230,12 @@ extern yaml-parser-parse-one(parser: libyaml-parser): <div> maybe<libyaml-event>
 extern yaml-get-event-type(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_type"
 
+extern yaml-get-event-stream-start-encoding(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_stream_start_encoding"
+
+extern yaml-get-event-document-start-version-directive(^ev: libyaml-event): maybe<(int, int)>
+  c "kk_yaml_yamlc_get_event_document_start_version_directive"
+
 extern yaml-get-start-mark(^ev: libyaml-event): yaml-mark
   c "kk_yaml_yamlc_get_start_mark"
 
@@ -259,9 +295,15 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
 
   val event = match et
     0 -> Nothing
-    1 -> Just(EventStreamStart)
+    1 ->
+      val encoding = match ev.yaml-get-event-stream-start-encoding.int.yaml-encoding/from-int()
+        Just(enc) -> enc
+        Nothing   -> AnyEncoding
+      Just(EventStreamStart(encoding))
     2 -> Just(EventStreamEnd)
-    3 -> Just(EventDocumentStart)
+    3 ->
+      val version = ev.yaml-get-event-document-start-version-directive.map(fn ((major, minor)){ YamlVersion(major, minor) })
+      Just(EventDocumentStart(version, ))
     4 -> Just(EventDocumentEnd)
     5 -> 
       val anchor = ev.yaml-get-alias-anchor

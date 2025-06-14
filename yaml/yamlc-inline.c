@@ -1,33 +1,41 @@
+#include <kklib.h>
 #include <stdio.h>
 #include <yaml.h>
-#include <kklib.h>
+
 
 /**
  * Common pattern for accessing int32 value
  */
-#define DEFINE_YAML_EVENT_INT32_GETTER(UNION_MEMBER, FIELD_NAME, FIELD_TYPE, SUFFIX) \
-static int32_t kk_yaml_yamlc_get_event_##SUFFIX(kk_box_t bevent, \
-                                                kk_context_t *ctx) { \
-  yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx); \
-  /* The field's value (enum or int) is safely cast to int32_t */ \
-  int32_t value = (int32_t)((FIELD_TYPE)event->data.UNION_MEMBER.FIELD_NAME); \
-  return value; \
-}
+#define DEFINE_YAML_EVENT_INT32_GETTER(UNION_MEMBER, FIELD_NAME, FIELD_TYPE,   \
+                                       SUFFIX)                                 \
+  static int32_t kk_yaml_yamlc_get_event_##SUFFIX(kk_box_t bevent,             \
+                                                  kk_context_t *ctx) {         \
+    yaml_event_t *event =                                                      \
+        (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);               \
+    /* The field's value (enum or int) is safely cast to int32_t */            \
+    int32_t value =                                                            \
+        (int32_t)((FIELD_TYPE)event->data.UNION_MEMBER.FIELD_NAME);            \
+    return value;                                                              \
+  }
 
-#define DEFINE_YAML_EVENT_STRING_GETTER(UNION_MEMBER, FIELD_NAME, FIELD_TYPE, SUFFIX) \
-static kk_string_t kk_yaml_yamlc_get_event_##SUFFIX(kk_box_t bevent, \
-                                                    kk_context_t *ctx) { \
-  yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx); \
-  /* Access the field, cast to const char* for string functions */ \
-  const char *c_str_ptr = (const char *)((FIELD_TYPE)event->data.UNION_MEMBER.FIELD_NAME); \
-                                                                            \
-  if (!c_str_ptr) { /* Handle NULL pointers from libyaml (e.g., absent optional fields) */ \
-    return kk_string_empty(); /* Return an empty Koka string */ \
-  } \
-  kk_string_t koka_str = kk_string_alloc_from_qutf8(c_str_ptr, ctx); \
-  \
-  return koka_str; \
-}
+#define DEFINE_YAML_EVENT_STRING_GETTER(UNION_MEMBER, FIELD_NAME, FIELD_TYPE,  \
+                                        SUFFIX)                                \
+  static kk_string_t kk_yaml_yamlc_get_event_##SUFFIX(kk_box_t bevent,         \
+                                                      kk_context_t *ctx) {     \
+    yaml_event_t *event =                                                      \
+        (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);               \
+    /* Access the field, cast to const char* for string functions */           \
+    const char *c_str_ptr =                                                    \
+        (const char *)((FIELD_TYPE)event->data.UNION_MEMBER.FIELD_NAME);       \
+                                                                               \
+    if (!c_str_ptr) { /* Handle NULL pointers from libyaml (e.g., absent       \
+                         optional fields) */                                   \
+      return kk_string_empty(); /* Return an empty Koka string */              \
+    }                                                                          \
+    kk_string_t koka_str = kk_string_alloc_from_qutf8(c_str_ptr, ctx);         \
+                                                                               \
+    return koka_str;                                                           \
+  }
 
 static void kk_yaml_parser_free(void *p, kk_block_t *b, kk_context_t *ctx) {
   // kk_unused(ctx);
@@ -128,7 +136,7 @@ static kk_std_core_types__maybe kk_yaml_parse_one(kk_box_t bparser,
 }
 
 static int32_t kk_yaml_yamlc_get_event_type(kk_box_t bevent,
-                                                 kk_context_t *ctx) {
+                                            kk_context_t *ctx) {
   yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
   int32_t event_type = event->type;
   // kk_info_message("Got event type %d\n", event_type);
@@ -161,10 +169,10 @@ static kk_yaml_yamlc__yaml_mark kk_yaml_yamlc_get_end_mark(kk_box_t bevent,
   return yamlc_convert_libyaml_mark(&event->end_mark, ctx);
 }
 
-DEFINE_YAML_EVENT_STRING_GETTER(alias, anchor, yaml_char_t*, alias_anchor);
+DEFINE_YAML_EVENT_STRING_GETTER(alias, anchor, yaml_char_t *, alias_anchor);
 
 static kk_string_t kk_yaml_yamlc_get_event_scalar_value(kk_box_t bevent,
-                                                  kk_context_t *ctx) {
+                                                        kk_context_t *ctx) {
   yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
 
   const char *value = (const char *)event->data.scalar.value;
@@ -175,21 +183,93 @@ static kk_string_t kk_yaml_yamlc_get_event_scalar_value(kk_box_t bevent,
   return str;
 }
 
+// accessor for stream_start
+DEFINE_YAML_EVENT_INT32_GETTER(stream_start, encoding, yaml_encoding_t,
+                               stream_start_encoding);
+
+// accessor for document start
+static kk_std_core_types__maybe
+kk_yaml_yamlc_get_event_document_start_version_directive(kk_box_t bevent,
+                                                         kk_context_t *ctx) {
+  yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
+
+  if (!event->data.document_start.version_directive) {
+    // null, convert to nothing
+    return kk_std_core_types__new_Nothing(ctx);
+  }
+
+  int major = (int)(event->data.document_start.version_directive->major);
+  int minor = (int)(event->data.document_start.version_directive->minor);
+  return kk_std_core_types__new_Just(
+      kk_std_core_types__tuple2_box(
+        kk_std_core_types__new_Tuple2(
+          kk_integer_box(kk_integer_from_int(major, ctx), ctx),
+          kk_integer_box(kk_integer_from_int(minor, ctx), ctx), 
+          ctx),
+        ctx),
+      ctx);
+}
+
+static kk_std_core_types__list
+kk_yaml_yamlc_get_event_document_start_tag_directives(kk_box_t bevent, kk_context_t *ctx) {
+  yaml_event_t *event = (yaml_event_t *)kk_cptr_raw_unbox_borrowed(bevent, ctx);
+
+  kk_std_core_types__list hd  = kk_std_core_types__new_Nil(ctx);
+
+  if (event->data.document_start.tag_directives.start == event->data.document_start.tag_directives.end) {
+    return hd;
+  }
+
+  yaml_tag_directive_t *tag;
+  kk_std_core_types__tuple2 directive;
+  const char *handler;
+  const char *prefix;
+
+  for ( tag = event->data.document_start.tag_directives.start; tag != event->data.document_start.tag_directives.end; tag++) {
+    handler = (const char *)((yaml_char_t *)tag->handle);
+    prefix = (const char *)((yaml_char_t *)tag->prefix);
+
+    directive = kk_std_core_types__new_Tuple2(
+      kk_string_box(kk_string_alloc_from_qutf8(handler, ctx)), 
+      kk_string_box(kk_string_alloc_from_qutf8(prefix, ctx)),
+      ctx
+    );
+    hd = kk_std_core_types__new_Cons(kk_reuse_null, 0, kk_std_core_types__tuple2_box(directive, ctx), hd, ctx);
+  }
+
+  return hd;
+}
+DEFINE_YAML_EVENT_INT32_GETTER(document_start, implicit, int, document_start_implicit);
+
 // accessor for scalar field
-DEFINE_YAML_EVENT_INT32_GETTER(scalar, style, yaml_scalar_style_t, scalar_style);
-DEFINE_YAML_EVENT_INT32_GETTER(scalar, plain_implicit, int, scalar_plain_implicit);
-DEFINE_YAML_EVENT_INT32_GETTER(scalar, quoted_implicit, int, scalar_quoted_implicit);
-DEFINE_YAML_EVENT_STRING_GETTER(scalar, tag, yaml_char_t*, scalar_tag);
-DEFINE_YAML_EVENT_STRING_GETTER(scalar, anchor, yaml_char_t*, scalar_anchor);
+DEFINE_YAML_EVENT_INT32_GETTER(scalar, style, yaml_scalar_style_t,
+                               scalar_style);
+DEFINE_YAML_EVENT_INT32_GETTER(scalar, plain_implicit, int,
+                               scalar_plain_implicit);
+DEFINE_YAML_EVENT_INT32_GETTER(scalar, quoted_implicit, int,
+                               scalar_quoted_implicit);
+DEFINE_YAML_EVENT_STRING_GETTER(scalar, tag, yaml_char_t *, scalar_tag);
+DEFINE_YAML_EVENT_STRING_GETTER(scalar, anchor, yaml_char_t *, scalar_anchor);
 
 // accessor for sequence field
-DEFINE_YAML_EVENT_STRING_GETTER(sequence_start, anchor, yaml_char_t*, sequence_start_anchor);
-DEFINE_YAML_EVENT_INT32_GETTER(sequence_start, style, yaml_sequence_style_t, sequence_start_style);
-DEFINE_YAML_EVENT_STRING_GETTER(sequence_start, tag, yaml_char_t*, sequence_start_tag);
-DEFINE_YAML_EVENT_INT32_GETTER(sequence_start, implicit, int, sequence_start_implicit);
+DEFINE_YAML_EVENT_STRING_GETTER(sequence_start, anchor, yaml_char_t *,
+                                sequence_start_anchor);
+DEFINE_YAML_EVENT_INT32_GETTER(sequence_start, style, yaml_sequence_style_t,
+                               sequence_start_style);
+DEFINE_YAML_EVENT_STRING_GETTER(sequence_start, tag, yaml_char_t *,
+                                sequence_start_tag);
+DEFINE_YAML_EVENT_INT32_GETTER(sequence_start, implicit, int,
+                               sequence_start_implicit);
 
 // accessor for mapping field
-DEFINE_YAML_EVENT_STRING_GETTER(mapping_start, anchor, yaml_char_t*, mapping_start_anchor);
-DEFINE_YAML_EVENT_STRING_GETTER(mapping_start, tag, yaml_char_t*, mapping_start_tag);
-DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, style, yaml_mapping_style_t, mapping_start_style);
-DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, implicit, int, mapping_start_implicit);
+DEFINE_YAML_EVENT_STRING_GETTER(mapping_start, anchor, yaml_char_t *,
+                                mapping_start_anchor);
+DEFINE_YAML_EVENT_STRING_GETTER(mapping_start, tag, yaml_char_t *,
+                                mapping_start_tag);
+DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, style, yaml_mapping_style_t,
+                               mapping_start_style);
+DEFINE_YAML_EVENT_INT32_GETTER(mapping_start, implicit, int,
+                               mapping_start_implicit);
+
+// accessor for document end
+DEFINE_YAML_EVENT_INT32_GETTER(document_end, implicit, int, document_end_implicit);

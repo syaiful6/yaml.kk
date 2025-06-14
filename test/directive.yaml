@@ -1,0 +1,9 @@
+%TAG !h! tag:example.com/2024/custom-types/
+---
+- !h!Book
+  title: The YAML Guide
+  author: Alice
+
+- !h!Article
+  title: Understanding Tags
+  url: http://example.com/tags

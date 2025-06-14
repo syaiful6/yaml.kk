@@ -40,8 +40,8 @@ type parse-node
   MappingBuilder(tag: tag, anchor: anchor, implicit: bool, state: mapping-state, members: list<(yaml-value, yaml-value)>)
   SequenceBuilder(tag: tag, anchor: anchor, implicit: bool, members: list<yaml-value>)
 
-
-alias anchor-map = list<(string, yaml-value)>
+// TODO: use proper map when koka have that in std library
+pub alias anchor-map = list<(string, yaml-value)>
 
 // TODO: actually print yaml string
 pub fun yaml-value/show(value: yaml-value): <div> string
@@ -53,6 +53,18 @@ pub fun yaml-value/show(value: yaml-value): <div> string
       "Sequence(" ++ [show(tag), show(anchor), show(members), show(implicit)].join(", ") ++ ")" 
     Mapping(tag, anchor, members, implicit) ->
       "Mapping(" ++ [show(tag), show(anchor), show(members), show(implicit)].join(", ") ++ ")"
+
+/**
+ * Yaml document contains pair of anchor map and yaml-value. The Alias constructor can be
+ * resolved using anchor-map
+ */
+pub value struct yaml-document
+  anchor-map: anchor-map // map to alias name to resolved node
+  content: yaml-value
+
+
+pub fun yaml-document/show(doc: yaml-document): <div> string
+  "Yamldocument(anchor-map = " ++ doc.anchor-map.show() ++ ", content = " ++ doc.content.show() ++ ")"
 
 
 fun char/quote(c: char): string
@@ -136,39 +148,40 @@ pub fun to-json(value: yaml-value): <div> either<exception, yaml-json>
   try({ Right(value.to-json-exn())}) fn(exn){ Left(exn) }
 
 
-pub fun parse-yaml-stream(events: list<marked-event>): <div> either<exception, list<yaml-value>>
+pub fun parse-yaml-stream(events: list<marked-event>): <div> either<exception, list<yaml-document>>
   try({ Right(events.parse-yaml-stream-exn()) }) fn(exn){ Left(exn) }
 
 
-pub fun parse-yaml-stream-exn(events: list<marked-event>): <div,exn> list<yaml-value>
+pub fun parse-yaml-stream-exn(events: list<marked-event>): <div,exn> list<yaml-document>
   match events
     Nil -> throw("Empty events", YamlExnParser(Nothing))
     Cons(Marked-event(EventStreamStart, _, _), rest) -> parse-documents-loop(rest, Nil)
     _ -> throw("Expected StreamStart as the first event", YamlExnParser(Nothing))
 
 
-fun parse-documents-loop(events: list<marked-event>, acc: list<yaml-value>): <div,exn> list<yaml-value>
+fun parse-documents-loop(events: list<marked-event>, acc: list<yaml-document>): <div,exn> list<yaml-document>
   match events
     Nil -> throw("parse error: Unexpected end of stream, expected StreamEnd")
     Cons(Marked-event(EventStreamEnd, _, _)) -> acc.reverse
     _ ->
-      val (doc-value, remaining-events) = events.parse-yaml-document()
-      remaining-events.parse-documents-loop(Cons(doc-value, acc))
+      val (doc-value, remaining-events, anchor-map) = events.parse-yaml-document()
+      val document = Yaml-document(anchor-map, doc-value)
+      remaining-events.parse-documents-loop(Cons(document, acc))
 
 
-fun parse-yaml-document(events: list<marked-event>): <div,exn> (yaml-value, list<marked-event>)
+fun parse-yaml-document(events: list<marked-event>): <div,exn> (yaml-value, list<marked-event>, anchor-map)
   match events
     Cons(Marked-event(EventDocumentStart, _, _), rest) ->
-      val (root-node, events-after-content) = rest.parse-content-node(Nil, Nil)
+      val (root-node, events-after-content, anchor-map) = rest.parse-content-node(Nil, Nil)
       match events-after-content
-        Cons(Marked-event(EventDocumentEnd, _, _), remaining-after-doc-end) -> (root-node, remaining-after-doc-end)
-        Cons(current, _) -> throw("Expecting EventDocumentStart", YamlExnParser(Just(current)))
+        Cons(Marked-event(EventDocumentEnd, _, _), remaining-after-doc-end) -> (root-node, remaining-after-doc-end, anchor-map)
+        Cons(current, _) -> throw("Expecting EventDocumentEnd after document content", YamlExnParser(Just(current)))
         Nil -> throw("Expected EventDocumentEnd after document content.", YamlExnParser(Nothing))
     Cons(Marked-event(ev, start, end), _)-> throw("Expecting EventDocumentStart, but got " ++ show(ev), YamlExnParser(Just(Marked-event(ev, start, end))))
     _ -> throw("Expecting events, but got empty", YamlExnParser(Nothing))
 
 
-fun parse-content-node(events: list<marked-event>, stack: list<parse-node>, anchors: anchor-map): <div,exn> (yaml-value, list<marked-event>)
+fun parse-content-node(events: list<marked-event>, stack: list<parse-node>, anchors: anchor-map): <div,exn> (yaml-value, list<marked-event>, anchor-map)
   match events
     Nil -> throw("Unexpected end of content stream")
     Cons(Marked-event(event, start-mark, end-mark), rest) ->
@@ -199,7 +212,7 @@ fun parse-content-node(events: list<marked-event>, stack: list<parse-node>, anch
                 Just(name) -> anchors.insert(name, completed-mapping)
                 Nothing -> anchors
               if parent-stack.is-nil
-                then (completed-mapping, rest)
+                then (completed-mapping, rest, updated-anchors)
                 else completed-mapping.add-node-to-parent(parent-stack, updated-anchors, rest, Marked-event(event, start-mark, end-mark))
             _ -> throw("Mismatched MappingEnd event at " ++ show(start-mark), YamlExnParser(Just(Marked-event(event, start-mark, end-mark))))
         EventSequenceEnd ->
@@ -210,13 +223,13 @@ fun parse-content-node(events: list<marked-event>, stack: list<parse-node>, anch
                 Just(name) -> anchors.insert(name, completed-sequence)
                 Nothing -> anchors
               if parent-stack.is-nil
-                then (completed-sequence, rest)
+                then (completed-sequence, rest, updated-anchors)
                 else completed-sequence.add-node-to-parent(parent-stack, updated-anchors, rest, Marked-event(event, start-mark, end-mark))
             _ -> throw("Mismatched SequenceEnd event at " ++ show(start-mark),YamlExnParser(Just(Marked-event(event, start-mark, end-mark))))
         _ -> throw("Unexpected event type " ++ show(event) ++ "in content stream", YamlExnParser(Just(Marked-event(event, start-mark, end-mark))))
 
 
-fun add-node-to-parent(node: yaml-value, stack: list<parse-node>, anchors: anchor-map, rest: list<marked-event>, current: marked-event): <div,exn> (yaml-value, list<marked-event>)
+fun add-node-to-parent(node: yaml-value, stack: list<parse-node>, anchors: anchor-map, rest: list<marked-event>, current: marked-event): <div,exn> (yaml-value, list<marked-event>, anchor-map)
   match stack
     Nil -> throw("Unexpected node outside of a container at " ++ show(current.start), YamlExnParser(Just(current)))
     Cons(MappingBuilder(tag, anchor, implicit, ExpectingKey, members), ps) ->

@@ -14,6 +14,45 @@ pub alias anchor-name = string
 
 pub alias anchor = maybe<anchor-name>
 
+
+pub type yaml-encoding
+  AnyEncoding
+  Utf8Encoding
+  Utf16LeEncoding
+  Utf16BeEncoding
+
+
+pub fun yaml-encoding/show(enc: yaml-encoding): string
+  match enc
+    AnyEncoding -> "any"
+    Utf8Encoding -> "utf8"
+    Utf16LeEncoding -> "utf16le"
+    Utf16BeEncoding -> "utf16be"
+
+
+pub fun yaml-encoding/from-int(i: int): maybe<yaml-encoding>
+  match i
+    0 -> Just(AnyEncoding)
+    1 -> Just(Utf8Encoding)
+    2 -> Just(Utf16LeEncoding)
+    3 -> Just(Utf16BeEncoding)
+    _ -> Nothing
+
+
+pub value type yaml-version
+  YamlVersion(major: int, minor: int)
+
+pub fun yaml-version/show(version: yaml-version): string
+  version.major.show() ++ "." ++ version.minor.show()
+
+// yaml-tag-directive constains yaml tag directive handler and prefix
+pub value type yaml-tag-directive
+  YamlTagDirective(hd: string, pfx: string)
+
+
+pub fun yaml-tag-directive/show(directive: yaml-tag-directive): string
+  "YamlTagDirective(hd = " ++ show(directive.hd) ++ ", pfx = " ++ show(directive.pfx) ++ ")"
+
 // Style for scalars - e.g quoted / folded
 pub type style
   Any
@@ -24,17 +63,20 @@ pub type style
   Folded
   PlainNoTag
 
+
 // Style for sequences - e.g. block or flow
 pub type sequence-style
   AnySequence
   BlockSequence
   FlowSequence
 
+
 // Style for mapping - e.g block or flow
 pub type mapping-style
   AnyMapping
   BlockMapping
   FlowMapping
+
 
 pub value type tag
   StrTag
@@ -48,11 +90,12 @@ pub value type tag
   UriTag(uri:string)
   NoTag
 
+
 pub type event
-  EventStreamStart
+  EventStreamStart(encoding: yaml-encoding)
   EventStreamEnd
-  EventDocumentStart
-  EventDocumentEnd
+  EventDocumentStart(version: maybe<yaml-version>, tag-directive: list<yaml-tag-directive>, implicit: bool)
+  EventDocumentEnd(implicit: bool)
   EventAlias(name: anchor-name)
   EventScalar(value: string, tag: tag, style: style, anchor: anchor, plain-implicit: bool, quoted-implicit: bool)
   EventSequenceStart(tag: tag, style: sequence-style, anchor: anchor, implicit: bool)
@@ -60,11 +103,13 @@ pub type event
   EventMappingStart(tag: tag, style: mapping-style, anchor: anchor, implicit: bool)
   EventMappingEnd
 
+
 // The pointer position
 pub value struct yaml-mark
   index: int
   line: int
   column: int
+
 
 pub fun yaml-mark/show(mark: yaml-mark): string
   "index = " ++ show(mark.index) ++ " line = " ++ show(mark.line) ++ "column = " ++ show(mark.column)
@@ -161,10 +206,10 @@ pub fun mapping-style/show(s: mapping-style): string
 
 pub fun event/show(ev: event): string
   match ev
-    EventStreamStart -> "EventStreamStart"
+    EventStreamStart(encoding) -> "EventStreamStart(" ++ show(encoding) ++ ")"
     EventStreamEnd -> "EventStreamEnd"
-    EventDocumentStart -> "EventDocumentStart"
-    EventDocumentEnd -> "EventDocumentEnd"
+    EventDocumentStart(version, tag-directive, implicit) -> "EventDocumentStart(" ++ [show(version), show(tag-directive), show(implicit)].join(", ") ++ ")"
+    EventDocumentEnd(implicit) -> "EventDocumentEnd(" ++ show(implicit) ++ ")"
     EventAlias(name) -> "EventAlias(" ++ show(name) ++ ")"
     EventScalar(value, tag, style, anchor, plain-implicit, quoted-implicit) -> "EventScalar(" ++ [show(value), show(tag), show(style), show(anchor), show(plain-implicit), show(quoted-implicit)].join(", ") ++ ")"
     EventSequenceStart(tag, style, anchor, implicit) -> "EventSequenceStart(" ++ [show(tag), show(style), show(anchor), show(implicit)].join(", ") ++ ")"
@@ -199,6 +244,18 @@ extern yaml-parser-parse-one(parser: libyaml-parser): <div> maybe<libyaml-event>
 
 extern yaml-get-event-type(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_type"
+
+extern yaml-get-event-stream-start-encoding(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_stream_start_encoding"
+
+extern yaml-get-event-document-start-version-directive(^ev: libyaml-event): maybe<(int, int)>
+  c "kk_yaml_yamlc_get_event_document_start_version_directive"
+
+extern kk-yaml-yamlc-get-event-document-start-tag-directives(^ev: libyaml-event): list<(string, string)>
+  c "kk_yaml_yamlc_get_event_document_start_tag_directives"
+
+extern kk-yaml-yamlc-get-event-document-start-implicit(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_document_start_implicit"
 
 extern yaml-get-start-mark(^ev: libyaml-event): yaml-mark
   c "kk_yaml_yamlc_get_start_mark"
@@ -251,6 +308,9 @@ extern yaml-get-mapping-start-tag(^ev: libyaml-event): string
 extern yaml-get-mapping-start-implicit(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_mapping_start_implicit"
 
+extern yaml-get-event-document-end-implicit(^ev: libyaml-event): int32
+  c "kk_yaml_yamlc_get_event_document_end_implicit"
+
 // get event
 fun get-event(ev: libyaml-event): maybe<marked-event>
   val et = ev.yaml-get-event-type.int
@@ -259,10 +319,17 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
 
   val event = match et
     0 -> Nothing
-    1 -> Just(EventStreamStart)
+    1 ->
+      val encoding = match ev.yaml-get-event-stream-start-encoding.int.yaml-encoding/from-int()
+        Just(enc) -> enc
+        Nothing   -> AnyEncoding
+      Just(EventStreamStart(encoding))
     2 -> Just(EventStreamEnd)
-    3 -> Just(EventDocumentStart)
-    4 -> Just(EventDocumentEnd)
+    3 ->
+      val version = ev.yaml-get-event-document-start-version-directive.map(fn ((major, minor)){ YamlVersion(major, minor) })
+      val tag-directive = ev.kk-yaml-yamlc-get-event-document-start-tag-directives.map(fn ((hd, pref)){ YamlTagDirective(hd, pref)})
+      Just(EventDocumentStart(version, tag-directive, ev.kk-yaml-yamlc-get-event-document-start-implicit == 1.int32))
+    4 -> Just(EventDocumentEnd(ev.yaml-get-event-document-end-implicit == 1.int32))
     5 -> 
       val anchor = ev.yaml-get-alias-anchor
       Just(EventAlias(anchor));

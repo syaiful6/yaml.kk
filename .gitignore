@@ -1,4 +1,7 @@
 .koka
+.clangd
 scrach/
 .DS_Store
 .vscode
+.envrc
+.direnv

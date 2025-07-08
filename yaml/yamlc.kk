@@ -365,7 +365,7 @@ pub effect yaml-stream<a>
   fun yield(x: a) : ()
 
 // for someone need pull-based parsing
-pub fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
+fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
   val event = parser.yaml-parser-parse-one
   match event
     Nothing -> Nothing

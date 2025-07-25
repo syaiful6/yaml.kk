@@ -25,7 +25,7 @@
       system: let
         pkgs = import nixpkgs { inherit overlays system;};
         kokaVersion = "3.1.3";
-        koka = pkgs.kokapkgs.versions.${kokaVersion};
+        koka = pkgs.kokapkgs.${kokaVersion};
       in rec {
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [

@@ -1,0 +1,33 @@
+BasedOnStyle: Google
+Language: Cpp
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ColumnLimit: 100
+PointerAlignment: Right
+BreakBeforeBraces: Attach
+AlignAfterOpenBracket: Align
+AlignOperands: true
+AllowShortFunctionsOnASingleLine: Inline
+
+SpaceBeforeParens: Never
+SpaceAfterCStyleCast: true
+SpacesInParentheses: false
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInSquareBrackets: false
+
+AccessModifierOffset: -1
+
+BreakBeforeBinaryOperators: None
+CompactNamespaces: false
+Cpp11BracedListStyle: true 
+ForEachMacros:
+  - FOREACH
+  - Q_FOREACH
+  - BOOST_FOREACH
+IndentCaseLabels: false
+NamespaceIndentation: None
+ReflowComments: true 
+SortIncludes: CaseSensitive
+FixNamespaceComments: true

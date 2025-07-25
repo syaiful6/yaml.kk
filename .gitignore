@@ -3,5 +3,5 @@
 scrach/
 .DS_Store
 .vscode
-.envrc
+.envrc.local
 .direnv

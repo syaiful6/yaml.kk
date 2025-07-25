@@ -38,6 +38,13 @@ pub fun yaml-encoding/from-int(i: int): maybe<yaml-encoding>
     3 -> Just(Utf16BeEncoding)
     _ -> Nothing
 
+pub fun yaml-encoding/to-int(enc: yaml-encoding): int
+  match enc
+    AnyEncoding -> 0
+    Utf8Encoding -> 1
+    Utf16LeEncoding -> 2
+    Utf16BeEncoding -> 3
+
 
 pub value type yaml-version
   YamlVersion(major: int, minor: int)
@@ -164,6 +171,16 @@ fun style/from-int(v: int) : maybe<style>
     6 -> Just(PlainNoTag)
     _ -> Nothing
 
+fun style/to-int(style: style): int
+  match style
+    Any -> 0
+    Plain -> 1
+    SingleQuoted -> 2
+    DoubleQuoted -> 3
+    Literal -> 4
+    Folded -> 5
+    PlainNoTag -> 6
+
 fun sequence-style/from-int(v: int): maybe<sequence-style>
   match v
     0 -> Just(AnySequence)
@@ -171,6 +188,11 @@ fun sequence-style/from-int(v: int): maybe<sequence-style>
     2 -> Just(FlowSequence)
     _ -> Nothing
 
+fun sequence-style/to-int(style: sequence-style): int
+  match style
+    AnySequence -> 0
+    BlockSequence -> 1
+    FlowSequence -> 2
 
 fun mapping-style/from-int(v: int): maybe<mapping-style>
   match v
@@ -179,6 +201,11 @@ fun mapping-style/from-int(v: int): maybe<mapping-style>
     2 -> Just(FlowMapping)
     _ -> Nothing
 
+fun mapping-style/to-int(style: mapping-style): int
+  match style
+    AnyMapping -> 0
+    BlockMapping -> 1
+    FlowMapping -> 2
 
 pub fun style/show(s: style): string
   match s
@@ -229,6 +256,9 @@ alias libyaml-event = any
 
 extern yaml-open-file(path: string): any
   c "kk_yaml_yamlc_open_file"
+
+extern yaml-open-write-file(path: string): any
+  c "kk_yaml_yamlc_open_write_file"
 
 extern yaml-close-file(file: any): ()
   c "kk_yaml_yamlc_close_file"
@@ -365,7 +395,7 @@ pub effect yaml-stream<a>
   fun yield(x: a) : ()
 
 // for someone need pull-based parsing
-pub fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
+fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
   val event = parser.yaml-parser-parse-one
   match event
     Nothing -> Nothing
@@ -409,3 +439,98 @@ pub fun collect-stream-event(action: () -> <yaml-stream<marked-event>|e> ()): e 
     fun yield(x: marked-event) lines := Cons(x, lines)
 
   action()
+
+pub alias libyaml-emitter = any
+
+// our custom buffer
+pub alias yamlc-buffer = any
+
+extern kk-emitter-create(): libyaml-emitter
+  c "kk_yaml_emitter_create"
+
+extern kk-buffer-create(): yamlc-buffer
+  c "kk_yamlc_buffer_create"
+
+extern kk-emitter-set-output-buffer(^emitter: libyaml-emitter, ^buffer: yamlc-buffer): ()
+  c "kk_yaml_yamlc_emitter_set_output_buffer"
+
+extern kk-emitter-set-output-file(^emitter: libyaml-emitter, ^file: any): ()
+  c "kk_yaml_yamlc_emitter_set_output_file"
+
+extern kk-buffer-get-string(^buffer: yamlc-buffer): string
+  c "kk_yaml_yamlc_get_buffer_string"
+
+extern kk-emitter-emit-event(^emitter: libyaml-emitter, ^event: libyaml-event): int
+  c "kk_yaml_yamlc_emit_event"
+
+extern kk-stream-start-event-init(encoding: int32): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_stream_start_event"
+
+extern kk-stream-end-event-init(): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_stream_end_event"
+
+extern kk-document-start-event-init(version: maybe<yaml-version>, tag-directive: list<yaml-tag-directive>, implicit: bool): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_document_start_event"
+
+extern kk-document-end-event-init(implicit: bool): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_document_end_event"
+
+extern kk-alias-event-init(name: string): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_alias_event"
+
+extern kk-scalar-event-init(anchor: anchor, tag: maybe<string>, value: string, plain_implicit: bool, quoted_implicit: bool, style: int32): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_scalar_event"
+
+extern kk-sequence-start-event-init(anchor: anchor, tag: maybe<string>, implicit: bool, style: int32): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_sequence_start_event"
+
+extern kk-sequence-end-event-init(): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_sequence_end_event"
+
+extern kk-mapping-start-event-init(anchor: anchor, tag: maybe<string>, implicit: bool, style: int32): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_mapping_start_event"
+
+extern kk-mapping-end-event-init(): maybe<libyaml-event>
+  c "kk_yaml_yamlc_make_mapping_end_event"
+
+fun emitter-create(): libyaml-emitter
+  kk-emitter-create()
+
+fun emit(emitter: libyaml-emitter, event: event): ()
+  val maybe-event = match event
+    EventStreamStart(encoding) -> kk-stream-start-event-init(encoding.to-int.int32())
+    EventStreamEnd -> kk-stream-end-event-init()
+    EventDocumentStart(version, tag-directive, implicit) ->
+      kk-document-start-event-init(version, tag-directive, implicit)
+    EventDocumentEnd(implicit) -> kk-document-end-event-init(implicit)
+    EventAlias(name) -> kk-alias-event-init(name)
+    EventScalar(value, tag, style, anchor, plain-implicit, quoted-implicit) ->
+      kk-scalar-event-init(anchor, Just(tag.tag-to-string()), value, plain-implicit, quoted-implicit, style.to-int.int32())
+    EventSequenceStart(tag, style, anchor, implicit) ->
+      kk-sequence-start-event-init(anchor, Just(tag.tag-to-string()), implicit, style.to-int.int32())
+    EventSequenceEnd ->
+      kk-sequence-end-event-init()
+    EventMappingStart(tag, style, anchor, implicit) ->
+      kk-mapping-start-event-init(anchor, Just(tag.tag-to-string()), implicit, style.to-int.int32())
+    EventMappingEnd ->
+      kk-mapping-end-event-init()
+
+  match maybe-event
+    Just(ev) ->
+      val _ = kk-emitter-emit-event(emitter, ev)
+      ()
+    Nothing ->
+      ()
+
+pub fun encode-string(action: () -> <yaml-stream<event>|e> ()): e string
+  val emitter = emitter-create()
+  val buffer = kk-buffer-create()
+  kk-emitter-set-output-buffer(emitter, buffer)
+
+  with handler
+    return(x) buffer.kk-buffer-get-string
+    fun yield(x: event)
+      emitter.emit(x)
+
+  action()
+

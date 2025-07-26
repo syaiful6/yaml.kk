@@ -132,14 +132,17 @@ static kk_std_core_types__either kk_yaml_parse_one(kk_box_t bparser, kk_context_
   // kk_info_message("kk_yaml_parse_one at %p\n", parser);
   if(!yaml_parser_parse(parser, event)) {
     // Create error struct with detailed information
-    kk_string_t error_msg = kk_string_alloc_from_qutf8(parser->problem ? parser->problem : "Unknown parse error", ctx);
-    kk_integer_t line = kk_integer_from_size_t(parser->problem_mark.line + 1, ctx);  // Convert to 1-based
-    kk_integer_t column = kk_integer_from_size_t(parser->problem_mark.column + 1, ctx);  // Convert to 1-based  
+    kk_string_t error_msg =
+        kk_string_alloc_from_qutf8(parser->problem ? parser->problem : "Unknown parse error", ctx);
+    kk_integer_t line =
+        kk_integer_from_size_t(parser->problem_mark.line + 1, ctx);  // Convert to 1-based
+    kk_integer_t column =
+        kk_integer_from_size_t(parser->problem_mark.column + 1, ctx);  // Convert to 1-based
     kk_integer_t index = kk_integer_from_size_t(parser->problem_mark.index, ctx);
-    
-    struct kk_yaml_yamlc_Yaml_parse_error error_struct = 
-      kk_yaml_yamlc__new_Yaml_parse_error(error_msg, line, column, index, ctx);
-    
+
+    struct kk_yaml_yamlc_Yaml_parse_error error_struct =
+        kk_yaml_yamlc__new_Yaml_parse_error(error_msg, line, column, index, ctx);
+
     yaml_event_delete(event);
     kk_free(event, ctx);
     kk_box_drop(bparser, ctx);
@@ -362,13 +365,7 @@ static kk_unit_t kk_yaml_yamlc_emitter_set_output_buffer(kk_box_t bemitter, kk_b
 static kk_string_t kk_yaml_yamlc_get_buffer_string(kk_box_t bbufer, kk_context_t *ctx) {
   kk_yamlc_buffer_t *buffer = (kk_yamlc_buffer_t *) kk_cptr_raw_unbox_borrowed(bbufer, ctx);
 
-  // Copy the buffer data to ensure string ownership
-  // This prevents dangling pointers if the buffer is freed
-  char *copied_buff = kk_malloc(buffer->used + 1, ctx);
-  memcpy(copied_buff, buffer->buffer, buffer->used);
-  copied_buff[buffer->used] = '\0';
-
-  kk_string_t str = kk_string_alloc_from_utf8n(buffer->used, copied_buff, ctx);
+  kk_string_t str = kk_string_alloc_from_utf8n(buffer->used, (const char *) buffer->buffer, ctx);
 
   return str;
 }
@@ -391,7 +388,6 @@ static kk_integer_t kk_yaml_yamlc_emit_event(kk_box_t bemitter, kk_box_t bevent,
   static kk_std_core_types__maybe kk_yaml_yamlc_make_##NAME##_event(kk_context_t *ctx) {      \
     yaml_event_t *ev = kk_malloc(sizeof(yaml_event_t), ctx);                                  \
     if(!FUNC(ev)) {                                                                           \
-      kk_info_message("failed to initialize event");                                          \
       kk_free(ev, ctx);                                                                       \
       return kk_std_core_types__new_Nothing(ctx);                                             \
     }                                                                                         \
@@ -405,7 +401,7 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_stream_start_event(int32_t en
                                                                       kk_context_t *ctx) {
   yaml_event_t *ev = kk_malloc(sizeof(yaml_event_t), ctx);
   if(!yaml_stream_start_event_initialize(ev, (yaml_encoding_t) encoding_i32)) {
-    kk_info_message("kk_yaml_yamlc_make_stream_start_event: failed to initialize event");
+    // kk_info_message("kk_yaml_yamlc_make_stream_start_event: failed to initialize event");
     kk_free(ev, ctx);
     return kk_std_core_types__new_Nothing(ctx);
   }
@@ -428,7 +424,8 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_document_start_event(
     version_struct.major = (int) kk_integer_clamp(vversion.major, ctx);
     version_struct.minor = (int) kk_integer_clamp(vversion.minor, ctx);
     version_ptr = &version_struct;  // Point to stack allocated struct
-    kk_info_message("using version directive: %d.%d\n", version_struct.major, version_struct.minor);
+    // kk_info_message("using version directive: %d.%d\n", version_struct.major,
+    // version_struct.minor);
   }
 
   // For now, ignore tag directives to isolate the memory issue
@@ -440,7 +437,7 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_document_start_event(
 
   if(!yaml_document_start_event_initialize(ev, version_ptr, start, end, implicit)) {
     // Clean up allocated memory on failure
-    kk_info_message("kk_yaml_yamlc_make_document_start_event failed to initialize: %p\n", ev);
+    // kk_info_message("kk_yaml_yamlc_make_document_start_event failed to initialize: %p\n", ev);
     kk_free(ev, ctx);
     return kk_std_core_types__new_Nothing(ctx);
   }
@@ -452,7 +449,7 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_document_end_event(bool impli
                                                                       kk_context_t *ctx) {
   yaml_event_t *ev = kk_malloc(sizeof(yaml_event_t), ctx);
   if(!yaml_document_end_event_initialize(ev, (int) implicit)) {
-    kk_info_message("kk_yaml_yamlc_make_document_end_event failed to initialize: %p\n", ev);
+    // kk_info_message("kk_yaml_yamlc_make_document_end_event failed to initialize: %p\n", ev);
     kk_free(ev, ctx);
     return kk_std_core_types__new_Nothing(ctx);
   }
@@ -471,7 +468,7 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_alias_event(kk_string_t ancho
 
   yaml_event_t *ev = kk_malloc(sizeof(yaml_event_t), ctx);
   if(!yaml_alias_event_initialize(ev, canchor)) {
-    kk_info_message("kk_yaml_yamlc_make_alias_event failed to initialize: %p\n", ev);
+    // kk_info_message("kk_yaml_yamlc_make_alias_event failed to initialize: %p\n", ev);
     free(canchor);
     kk_string_drop(anchor, ctx);
     kk_free(ev, ctx);
@@ -517,7 +514,7 @@ static kk_std_core_types__maybe kk_yaml_yamlc_make_scalar_event(
   yaml_event_t *ev = kk_malloc(sizeof(yaml_event_t), ctx);
   if(!yaml_scalar_event_initialize(ev, canchor, ctag, cvalue, len, (int) plain_implicit,
                                    (int) quoted_implicit, (yaml_scalar_style_t) style)) {
-    kk_info_message("failed to create event scalar\n");
+    // kk_info_message("failed to create event scalar\n");
     if(canchor) free(canchor);
     if(ctag) free(ctag);
     free(cvalue);

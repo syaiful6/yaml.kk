@@ -31,3 +31,4 @@ NamespaceIndentation: None
 ReflowComments: true 
 SortIncludes: CaseSensitive
 FixNamespaceComments: true
+

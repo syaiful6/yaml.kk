@@ -43,16 +43,34 @@ type parse-node
 // TODO: use proper map when koka have that in std library
 pub alias anchor-map = list<(string, yaml-value)>
 
-// TODO: actually print yaml string
-pub fun yaml-value/show(value: yaml-value): <div> string
+fun yaml-value/stream-events-helper(value: yaml-value): <yaml-stream<event>> ()
   match value
     Scalar(anchor, tag, value, style, plain-implicit, quoted-implicit) ->
-      "Scalar(" ++ [show(value), show(tag), show(style), show(anchor), show(plain-implicit), show(quoted-implicit)].join(", ") ++ ")"
-    Alias(name) -> "Alias(" ++ show(name) ++ ")"
+      yield(EventScalar(value, tag, style, anchor, plain-implicit, quoted-implicit))
+    Alias(name) ->
+      yield(EventAlias(name))
     Sequence(tag, anchor, members, implicit) ->
-      "Sequence(" ++ [show(tag), show(anchor), show(members), show(implicit)].join(", ") ++ ")" 
+      yield(EventSequenceStart(tag, AnySequence, anchor, implicit))
+      members.foreach(fn(child) child.pretend-decreasing.stream-events-helper)
+      yield(EventSequenceEnd)
     Mapping(tag, anchor, members, implicit) ->
-      "Mapping(" ++ [show(tag), show(anchor), show(members), show(implicit)].join(", ") ++ ")"
+      yield(EventMappingStart(tag, AnyMapping, anchor, implicit))
+      members.foreach fn ((k, v))
+        k.pretend-decreasing.stream-events-helper()
+        v.pretend-decreasing.stream-events-helper()
+      yield(EventMappingEnd)
+
+fun yaml-value/stream-events(value: yaml-value): <yaml-stream<event>> ()
+  yield(EventStreamStart(Utf8Encoding))
+  yield(EventDocumentStart(Nothing, Nil, True))
+  value.stream-events-helper()
+  yield(EventDocumentEnd(True))
+  yield(EventStreamEnd)
+
+// Show a string representation of yaml-value
+pub fun yaml-value/show(value: yaml-value): string
+  with encode-string
+  value.stream-events()
 
 /**
  * Yaml document contains pair of anchor map and yaml-value. The Alias constructor can be

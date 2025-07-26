@@ -6,9 +6,6 @@ import std/num/float64
 import std/core/undiv
 
 
-pub extend type exception-info
-  YamlExnConvert
-  YamlExnParser(event: maybe<marked-event>)
 
 /**
 * yaml-json is subset of a Yaml document that is compatible with JSON. This

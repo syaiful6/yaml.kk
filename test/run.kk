@@ -3,45 +3,52 @@ import std/os/path
 import yaml/yaml
 
 
-fun map-eff-event(action: () -> <yaml-stream<marked-event>,yaml-stream<event>|e> ()): <yaml-stream<event>|e> ()
+fun map-eff-event(action: () -> <yaml-stream<marked-event>,yaml-stream<event>,exn|e> ()): <yaml-stream<event>,exn|e> ()
   with fun yield(ev: marked-event) yield(ev.event)
   action()
 
-fun parse-file(name: string): <io> list<marked-event>
+fun parse-file(name: string): <io,exn> list<marked-event>
   val file = cwd() / name
   with collect-stream-event
   decode-file(file)
 
-fun parse-string(): <io> list<marked-event>
+fun parse-string(): <io,exn> list<marked-event>
   val file = cwd() / "test/example.yaml"
   val yaml = read-text-file(file)
   with collect-stream-event
   decode-string(yaml)
 
-fun parse-as-yaml(name: string): <io> list<yaml-document>
+fun parse-as-yaml(name: string): <io,exn> list<yaml-document>
   val streams = parse-file(name)
   streams.parse-yaml-stream-exn
 
-fun test-collect-stream()
+fun test-collect-stream(): <io,exn> ()
   val marked-events = "test/example.yaml".parse-file
   assert("correctly collect stream", list/length(marked-events) > 0)
   val events = marked-events.map fn(c)
     c.event
   events.show.println
 
-fun parse-file-events(name: string): <io,yaml-stream<event>> ()
+fun parse-file-events(name: string): <io,yaml-stream<event>,exn> ()
   val file = cwd() / name
   with map-eff-event
   decode-file(file)
 
-fun emit-to-string(name: string): <io> string
+fun emit-to-string(name: string): <io,exn> string
   with encode-string
   name.parse-file-events
 
-fun main()
+fun main(): <io,exn> ()
+  // Test error handling
+  try({
+    val bad-events = parse-file("test/bad-file.yaml")
+    "Parsed malformed YAML successfully (unexpected)".println
+  }) fn (exn)
+    ("ERROR CAUGHT: " ++ exn.show).println
+
   ["test/example.yaml", "test/directive.yaml"].foreach(fn(name)
     val events = parse-file(name)
-    val evs = events.map(fn(c)
+    val evs = events.map(fn (c)
       c.event
     )
 
@@ -49,7 +56,7 @@ fun main()
   )
 
   val events2 = parse-string()
-  val evs2 = events2.map fn(c)
+  val evs2 = events2.map fn (c)
     c.event
 
   evs2.show.println;

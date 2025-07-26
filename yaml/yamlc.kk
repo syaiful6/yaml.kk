@@ -2,6 +2,7 @@ module yaml/yamlc
 
 import std/os/path
 import std/num/int32
+import std/core/exn
 
 extern import
   c { vcpkg="libyaml"; library="yaml" }
@@ -231,6 +232,19 @@ pub fun mapping-style/show(s: mapping-style): string
     BlockMapping -> "BlockMapping"
     FlowMapping -> "FlowMapping"
 
+pub extend type exception-info
+  YamlExnConvert
+  YamlExnParser(event: maybe<marked-event>)
+
+pub value struct yaml-parse-error
+  message: string
+  line: int
+  column: int
+  index: int
+
+pub fun yaml-parse-error/show(err: yaml-parse-error): string
+  "YAML Parse Error at line " ++ err.line.show() ++ ", column " ++ err.column.show() ++ ": " ++ err.message
+
 pub fun event/show(ev: event): string
   match ev
     EventStreamStart(encoding) -> "EventStreamStart(" ++ show(encoding) ++ ")"
@@ -269,7 +283,7 @@ extern yaml-set-input-file(parser: libyaml-parser, file: any): ()
 extern yaml-set-input-string(parser: libyaml-parser, yaml: string): ()
   c "kk_yaml_c_set_input_string"
 
-extern yaml-parser-parse-one(parser: libyaml-parser): <div> maybe<libyaml-event>
+extern yaml-parser-parse-one(parser: libyaml-parser): <div> either<yaml-parse-error, libyaml-event>
   c "kk_yaml_parse_one"
 
 extern yaml-get-event-type(^ev: libyaml-event): int32
@@ -348,7 +362,7 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
   val end = yaml-get-end-mark(ev);
 
   val event = match et
-    0 -> Nothing
+    0 -> Nothing  // YAML_NO_EVENT - no more events available
     1 ->
       val encoding = match ev.yaml-get-event-stream-start-encoding.int.yaml-encoding/from-int()
         Just(enc) -> enc
@@ -394,26 +408,35 @@ fun get-event(ev: libyaml-event): maybe<marked-event>
 pub effect yaml-stream<a>
   fun yield(x: a) : ()
 
-// for someone need pull-based parsing
-fun do-parse-one(parser: libyaml-parser): <div> maybe<marked-event>
-  val event = parser.yaml-parser-parse-one
-  match event
-    Nothing -> Nothing
-    Just(event) -> event.get-event
+// for someone need pull-based parsing  
+fun do-parse-one(parser: libyaml-parser): <div> either<yaml-parse-error, maybe<marked-event>>
+  val result = parser.yaml-parser-parse-one
+  match result
+    Left(err) -> Left(err)
+    Right(event) -> Right(event.get-event)
 
 
-fun stream-event(parser: libyaml-parser): <div,yaml-stream<marked-event>> ()
+fun stream-event(parser: libyaml-parser): <div,yaml-stream<marked-event>,exn> ()
   val x = ref(False)
   while { not(!x) }
-    val event = parser.do-parse-one
-    match event
-      Nothing ->
-        x := True
-      Just(event) ->
-        yield(event)
+    val result = parser.do-parse-one
+    match result
+      Left(err) ->
+        throw(err.show, YamlExnParser(Nothing))
+      Right(maybe-event) ->
+        match maybe-event
+          Nothing -> 
+            x := True  // No more events, end parsing
+          Just(event) ->
+            match event  
+              Marked-event(EventStreamEnd, _, _) -> 
+                yield(event)
+                x := True
+              _ -> 
+                yield(event)
 
 
-pub fun decode-file(path: path): <div,yaml-stream<marked-event>> ()
+pub fun decode-file(path: path): <div,yaml-stream<marked-event>,exn> ()
   val parser = create-yaml-parser()
   val file = path.string.yaml-open-file
   with finally { yaml-close-file(file) }
@@ -421,18 +444,18 @@ pub fun decode-file(path: path): <div,yaml-stream<marked-event>> ()
   parser.stream-event
 
 
-pub fun decode-string(yaml: string): <div, yaml-stream<marked-event>> ()
+pub fun decode-string(yaml: string): <div,yaml-stream<marked-event>,exn> ()
   val parser = create-yaml-parser()
   parser.yaml-set-input-string(yaml)
   parser.stream-event
 
 
-pub fun print-stream-event(action: () -> <yaml-stream<marked-event>,console|e> a): <console|e> a
+pub fun print-stream-event(action: () -> <yaml-stream<marked-event>,console,exn|e> a): <console,exn|e> a
   with fun yield(x: marked-event) x.event.println
   action()
 
 
-pub fun collect-stream-event(action: () -> <yaml-stream<marked-event>|e> ()): e list<marked-event>
+pub fun collect-stream-event(action: () -> <yaml-stream<marked-event>,exn|e> ()): <exn|e> list<marked-event>
   var lines := []
   with handler
     return(x) lines.reverse()
@@ -522,6 +545,8 @@ fun emit(emitter: libyaml-emitter, event: event): ()
     Nothing ->
       ()
 
+
+// Effect handler that convert yaml-stream<event> to yaml string representation
 pub fun encode-string(action: () -> <yaml-stream<event>|e> ()): e string
   val emitter = emitter-create()
   val buffer = kk-buffer-create()

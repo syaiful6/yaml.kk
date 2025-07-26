@@ -126,24 +126,29 @@ static void kk_yaml_yamlc_close_file(kk_box_t bfile, kk_context_t *ctx) {
   kk_box_drop(bfile, ctx);
 }
 
-static kk_std_core_types__maybe kk_yaml_parse_one(kk_box_t bparser, kk_context_t *ctx) {
+static kk_std_core_types__either kk_yaml_parse_one(kk_box_t bparser, kk_context_t *ctx) {
   yaml_parser_t *parser = (yaml_parser_t *) kk_cptr_unbox_borrowed(bparser, ctx);
   yaml_event_t *event = kk_malloc(sizeof(yaml_event_t), ctx);
   // kk_info_message("kk_yaml_parse_one at %p\n", parser);
   if(!yaml_parser_parse(parser, event)) {
-    fprintf(stderr, "Parse error: %s\nLine: %lu Column: %lu\n", parser->problem,
-            (unsigned long) parser->problem_mark.line + 1,
-            (unsigned long) parser->problem_mark.column + 1);
-
+    // Create error struct with detailed information
+    kk_string_t error_msg = kk_string_alloc_from_qutf8(parser->problem ? parser->problem : "Unknown parse error", ctx);
+    kk_integer_t line = kk_integer_from_size_t(parser->problem_mark.line + 1, ctx);  // Convert to 1-based
+    kk_integer_t column = kk_integer_from_size_t(parser->problem_mark.column + 1, ctx);  // Convert to 1-based  
+    kk_integer_t index = kk_integer_from_size_t(parser->problem_mark.index, ctx);
+    
+    struct kk_yaml_yamlc_Yaml_parse_error error_struct = 
+      kk_yaml_yamlc__new_Yaml_parse_error(error_msg, line, column, index, ctx);
+    
     yaml_event_delete(event);
     kk_free(event, ctx);
     kk_box_drop(bparser, ctx);
-    return kk_std_core_types__new_Nothing(ctx);
+    return kk_std_core_types__new_Left(kk_yaml_yamlc__yaml_parse_error_box(error_struct, ctx), ctx);
   }
   // kk_info_message("kk_yaml_parse_one initialize event at %p\n", event);
   kk_box_drop(bparser, ctx);
-  // we got the event, wrap to Just
-  return kk_std_core_types__new_Just(kk_cptr_raw_box(&kk_yaml_parser_event_free, event, ctx), ctx);
+  // we got the event, wrap to Right
+  return kk_std_core_types__new_Right(kk_cptr_raw_box(&kk_yaml_parser_event_free, event, ctx), ctx);
 }
 
 static int32_t kk_yaml_yamlc_get_event_type(kk_box_t bevent, kk_context_t *ctx) {

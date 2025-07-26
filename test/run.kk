@@ -57,10 +57,8 @@ fun main()
   with name <- ["test/example.yaml", "test/strings.yaml", "test/mapping.yaml", "test/directive.yaml"].foreach
   val parsed = name.parse-as-yaml
   parsed.show.println()
+  val yaml-str = name.emit-to-string
+  ("file name: " ++ name ++ ", encoded-decoded is: \n" ++ yaml-str).println
   "Json representation".println()
   with yaml <- parsed.foreach
   yaml.to-json.show.println()
-
-  val yaml-str = name.emit-to-string
-  ("file name, encoded-decoded is: \n" ++ yaml-str).println
-  // yaml-str.println

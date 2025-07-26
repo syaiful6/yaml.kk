@@ -1,1 +1,0 @@
-fun main() "hello".println

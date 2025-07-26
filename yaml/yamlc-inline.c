@@ -326,8 +326,7 @@ static int kk_yamlc_buffer_append(void *ext, unsigned char *str, size_t size) {
   unsigned char *tmp;
 
   new_used = b->used + size;
-  for(new_size = b->size ? b->size : 8; new_size < new_used; new_size *= 2)
-    ;
+  for(new_size = b->size ? b->size : 8; new_size < new_used; new_size *= 2);
 
   if(new_size != (int) b->size) {
     // kk_info_message("realloc\n");

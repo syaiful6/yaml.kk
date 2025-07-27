@@ -224,6 +224,19 @@ tail fun parse-yaml-document(events: list<marked-event>): <div,exn> (yaml-value,
 
 
 tail fun parse-content-node(events: list<marked-event>, stack: list<parse-node>, anchors: anchor-map): <div,exn> (yaml-value, list<marked-event>, anchor-map)
+  fbip fun add-node-to-parent(node: yaml-value, parse-node: list<parse-node>, anchor-map: anchor-map, rest: list<marked-event>, current: marked-event): <div,exn> (yaml-value, list<marked-event>, anchor-map)
+    match parse-node
+      Nil -> throw("Unexpected node outside of a container at " ++ show(current.start), YamlExnParser(Just(current)))
+      Cons(MappingBuilder(tag, anchor, implicit, ExpectingKey, members), ps) ->
+        val new-mapping-builder = MappingBuilder(tag, anchor, implicit, ExpectingValue(node), members)
+        rest.parse-content-node(Cons(new-mapping-builder, ps), anchor-map)
+      Cons(MappingBuilder(tag, anchor, implicit, ExpectingValue(key), members), ps) ->
+        val new-mapping-builder = MappingBuilder(tag, anchor, implicit, ExpectingKey, Cons((key, node), members))
+        rest.parse-content-node(Cons(new-mapping-builder, ps), anchor-map)
+      Cons(SequenceBuilder(tag, anchor, implicit, members), ps) ->
+        val new-sequence-builder = SequenceBuilder(tag, anchor, implicit, Cons(node, members))
+        rest.parse-content-node(Cons(new-sequence-builder, ps), anchor-map)
+
   match events
     Nil -> throw("Unexpected end of content stream")
     Cons(Marked-event(event, start-mark, end-mark), rest) ->
@@ -270,16 +283,3 @@ tail fun parse-content-node(events: list<marked-event>, stack: list<parse-node>,
             _ -> throw("Mismatched SequenceEnd event at " ++ show(start-mark),YamlExnParser(Just(Marked-event(event, start-mark, end-mark))))
         _ -> throw("Unexpected event type " ++ show(event) ++ "in content stream", YamlExnParser(Just(Marked-event(event, start-mark, end-mark))))
 
-
-tail fun add-node-to-parent(node: yaml-value, stack: list<parse-node>, anchors: anchor-map, rest: list<marked-event>, current: marked-event): <div,exn> (yaml-value, list<marked-event>, anchor-map)
-  match stack
-    Nil -> throw("Unexpected node outside of a container at " ++ show(current.start), YamlExnParser(Just(current)))
-    Cons(MappingBuilder(tag, anchor, implicit, ExpectingKey, members), ps) ->
-      val new-mapping-builder = MappingBuilder(tag, anchor, implicit, ExpectingValue(node), members)
-      rest.parse-content-node(Cons(new-mapping-builder, ps), anchors)
-    Cons(MappingBuilder(tag, anchor, implicit, ExpectingValue(key), members), ps) ->
-      val new-mapping-builder = MappingBuilder(tag, anchor, implicit, ExpectingKey, Cons((key, node), members))
-      rest.parse-content-node(Cons(new-mapping-builder, ps), anchors)
-    Cons(SequenceBuilder(tag, anchor, implicit, members), ps) ->
-      val new-sequence-builder = SequenceBuilder(tag, anchor, implicit, Cons(node, members))
-      rest.parse-content-node(Cons(new-sequence-builder, ps), anchors)

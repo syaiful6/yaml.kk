@@ -280,7 +280,7 @@ extern yaml-close-file(file: any): ()
 extern yaml-set-input-file(parser: libyaml-parser, file: any): ()
   c "kk_yaml_yamlc_set_input_file"
 
-extern yaml-set-input-string(parser: libyaml-parser, yaml: string): ()
+extern yaml-set-input-string(parser: libyaml-parser, yaml: intptr_t, len: int64): ()
   c "kk_yaml_c_set_input_string"
 
 extern yaml-parser-parse-one(parser: libyaml-parser): <div> either<yaml-parse-error, libyaml-event>
@@ -354,6 +354,9 @@ extern yaml-get-mapping-start-implicit(^ev: libyaml-event): int32
 
 extern yaml-get-event-document-end-implicit(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_document_end_implicit"
+
+extern yaml-with-c-string(^s: string, f: (intptr_t, int64) -> e a): e a
+  c "kk_yaml_yamlc_with_c_string"
 
 // get event
 fun get-event(ev: libyaml-event): maybe<marked-event>
@@ -445,9 +448,10 @@ pub fun decode-file(path: path): <div,yaml-stream<marked-event>,exn> ()
 
 
 pub fun decode-string(yaml: string): <div,yaml-stream<marked-event>,exn> ()
-  val parser = create-yaml-parser()
-  parser.yaml-set-input-string(yaml)
-  parser.stream-event
+  yaml.yaml-with-c-string fn(addr, len)
+    val parser = create-yaml-parser()
+    parser.yaml-set-input-string(addr, len)
+    parser.stream-event
 
 
 pub fun print-stream-event(action: () -> <yaml-stream<marked-event>,console,exn|e> a): <console,exn|e> a
@@ -463,10 +467,10 @@ pub fun collect-stream-event(action: () -> <yaml-stream<marked-event>,exn|e> ())
 
   action()
 
-pub alias libyaml-emitter = any
+alias libyaml-emitter = any
 
 // our custom buffer
-pub alias yamlc-buffer = any
+alias yamlc-buffer = any
 
 extern kk-emitter-create(): libyaml-emitter
   c "kk_yaml_emitter_create"

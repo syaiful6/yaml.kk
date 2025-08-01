@@ -280,7 +280,7 @@ extern yaml-close-file(file: any): ()
 extern yaml-set-input-file(parser: libyaml-parser, file: any): ()
   c "kk_yaml_yamlc_set_input_file"
 
-extern yaml-set-input-string(parser: libyaml-parser, yaml: intptr_t, len: int64): ()
+extern yaml-set-input-string(parser: libyaml-parser, yaml: intptr_t, len: ssize_t): ()
   c "kk_yaml_c_set_input_string"
 
 extern yaml-parser-parse-one(parser: libyaml-parser): <div> either<yaml-parse-error, libyaml-event>
@@ -355,7 +355,7 @@ extern yaml-get-mapping-start-implicit(^ev: libyaml-event): int32
 extern yaml-get-event-document-end-implicit(^ev: libyaml-event): int32
   c "kk_yaml_yamlc_get_event_document_end_implicit"
 
-extern yaml-with-c-string(^s: string, f: (intptr_t, int64) -> e a): e a
+extern yaml-with-c-string(^s: string, f: (intptr_t, ssize_t) -> e a): e a
   c "kk_yaml_yamlc_with_c_string"
 
 // get event

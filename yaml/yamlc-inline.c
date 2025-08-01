@@ -1,4 +1,5 @@
 #include <kklib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <yaml.h>
 
@@ -86,19 +87,24 @@ static kk_unit_t kk_yaml_yamlc_set_input_file(kk_box_t bparser, kk_box_t bfile, 
   return kk_Unit;
 }
 
-static kk_unit_t kk_yaml_c_set_input_string(kk_box_t bparser, kk_string_t yaml, kk_context_t *ctx) {
+static kk_unit_t kk_yaml_c_set_input_string(kk_box_t bparser, kk_addr_t yaml, kk_ssize_t len,
+                                            kk_context_t *ctx) {
   yaml_parser_t *parser = (yaml_parser_t *) kk_cptr_unbox_borrowed(bparser, ctx);
-  kk_ssize_t len;
-  const u_int8_t *cyaml = kk_string_buf_borrow(yaml, &len, ctx);
-  yaml_parser_set_input_string(parser, cyaml, len);
-
+  yaml_parser_set_input_string(parser, (uint8_t *) yaml, len);
   // kk_string_drop(yaml, ctx);
   kk_box_drop(bparser, ctx);
 
   return kk_Unit;
 }
 
-kk_box_t kk_yaml_yamlc_open_file(kk_string_t path, kk_context_t *ctx) {
+static kk_box_t kk_yaml_yamlc_with_c_string(kk_string_t s, kk_function_t f, kk_context_t *_ctx) {
+  kk_ssize_t len;
+  kk_addr_t cptr = (kk_addr_t) kk_string_cbuf_borrow(s, &len, kk_context());
+  return kk_function_call(kk_box_t, (kk_function_t, kk_addr_t, kk_ssize_t, kk_context_t *), f,
+                          (f, cptr, len, kk_context()), kk_context());
+}
+
+static kk_box_t kk_yaml_yamlc_open_file(kk_string_t path, kk_context_t *ctx) {
   kk_ssize_t len;
   const char *cpat = kk_string_cbuf_borrow(path, &len, ctx);
 
@@ -108,7 +114,7 @@ kk_box_t kk_yaml_yamlc_open_file(kk_string_t path, kk_context_t *ctx) {
   return kk_cptr_box(file, ctx);
 }
 
-kk_box_t kk_yaml_yamlc_open_write_file(kk_string_t path, kk_context_t *ctx) {
+static kk_box_t kk_yaml_yamlc_open_write_file(kk_string_t path, kk_context_t *ctx) {
   kk_ssize_t len;
   const char *cpat = kk_string_cbuf_borrow(path, &len, ctx);
 

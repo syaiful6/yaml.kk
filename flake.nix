@@ -24,7 +24,7 @@
     flake-utils.lib.eachSystem systems (
       system: let
         pkgs = import nixpkgs { inherit overlays system;};
-        kokaVersion = "3.1.3";
+        kokaVersion = "3.2.2";
         koka = pkgs.kokapkgs.${kokaVersion};
       in rec {
         devShells.default = pkgs.mkShell {

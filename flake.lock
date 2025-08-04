@@ -42,11 +42,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1752683871,
-        "narHash": "sha256-q308G8y8x1Oj0qbTCyjMgH48+5W07EKmoXLTgyHfNWc=",
+        "lastModified": 1753515156,
+        "narHash": "sha256-DvSu97D/E7DO/mXno6KWmaS4uqfs9F3kRFWAu0f1WaI=",
         "owner": "syaiful6",
         "repo": "koka-overlay",
-        "rev": "24174ba873112c535995bd864ccabdf062a63d6e",
+        "rev": "589eff95f20f42e00a7355c492086df4cf6aa73e",
         "type": "github"
       },
       "original": {

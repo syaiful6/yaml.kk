@@ -554,7 +554,7 @@ fun emit(emitter: libyaml-emitter, event: event): ()
 pub fun encode-string(action: () -> <yaml-stream<event>|e> ()): e string
   val emitter = emitter-create()
   val buffer = kk-buffer-create()
-  kk-emitter-set-output-buffer(emitter, buffer)
+  emitter.kk-emitter-set-output-buffer(buffer)
 
   with handler
     return(x) buffer.kk-buffer-get-string
@@ -563,3 +563,17 @@ pub fun encode-string(action: () -> <yaml-stream<event>|e> ()): e string
 
   action()
 
+
+// Effect handler that convert yaml-stream<event> to yaml file for the given path
+pub fun encode-file(path: path, action: () -> <yaml-stream<event>|e> ()): e ()
+  val emitter = emitter-create()
+  val file = path.string.yaml-open-write-file
+  with finally { yaml-close-file(file) }
+  emitter.kk-emitter-set-output-file(file)
+
+  with handler
+    return(x) ()
+    fun yield(x: event)
+      emitter.emit(x)
+
+  action()

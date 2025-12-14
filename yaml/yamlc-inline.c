@@ -169,7 +169,7 @@ static int32_t kk_yaml_yamlc_get_event_type(kk_box_t bevent, kk_context_t *ctx) 
   return event_type;
 }
 
-inline kk_yaml_yamlc__yaml_mark yamlc_convert_libyaml_mark(yaml_mark_t *mark, kk_context_t *ctx) {
+static kk_yaml_yamlc__yaml_mark yamlc_convert_libyaml_mark(yaml_mark_t *mark, kk_context_t *ctx) {
   return kk_yaml_yamlc__new_Yaml_mark(kk_integer_from_size_t(mark->index, ctx),
                                       kk_integer_from_size_t(mark->line, ctx),
                                       kk_integer_from_size_t(mark->column, ctx), ctx);
